@@ -2,11 +2,11 @@
 
 ;====================================================================================================
 ;============██████████████====███████====██====██===█████████====██====██===========================
-;============██==========██====██====██===██====██===██===========██====██===========================
-;============██==========██====██====██===██====██===██===========██====██===========================
-;============██==========██====███████====██====██===█████████====████████===========================
-;============██==========██====██==██=====██====██==========██====██====██===========================
-;============██==========██====██===██====██====██==========██====██====██===========================
+;============██████████████====██====██===██====██===██===========██====██===========================
+;============██████████████====██====██===██====██===██===========██====██===========================
+;============██████████████====███████====██====██===█████████====████████===========================
+;============██████████████====██==██=====██====██==========██====██====██===========================
+;============██████████████====██===██====██====██==========██====██====██===========================
 ;============██████████████====██=====██==████████===█████████====██====██===========================
 ;====================================================================================================
 
@@ -26,7 +26,7 @@
   (/ WIDTH 5))
 
 (define BULLET-SIZE
-  (/ WIDTH 30))
+  (/ WIDTH 50))
 
 (define BULLET-SPRITE
   (circle BULLET-SIZE "solid" "white"))
@@ -34,14 +34,15 @@
 (define PLAYER-SPRITE
   (square BLOCK-SIZE "solid" "cyan"))
 
-; WorldState is a (make-world player bullets walls score) where:
+; WorldState is a (make-world player bullets walls score time) where:
 ; - player is a Player
 ; - bullets is a ListOf<Bullet>
 ; - walls is a ListOf<Wall>
 ; - score is a PosInt
+; - time is a PosInt
 ; Intrpr: It is the current state of the world at any given time during our
 ; big bang application
-(define-struct world [player bullets walls score])
+(define-struct world [player bullets walls score time])
 
 ; Player is a (make-player size x y) where:
 ; - size is a PosInt
@@ -80,6 +81,16 @@
 ; Score is a PosInt
 ; Intpr: it is the score held by the player
 
+; draw-bullets: ListOf<Bullet> Image --> Image
+(define (draw-bullets bullets image)
+  (cond
+    [(empty? bullets) image]
+    [else (draw-bullets (rest bullets) (place-image
+                                        (circle BULLET-SIZE "solid" "white")
+                                        (bullet-x (first bullets)) (bullet-y (first bullets))
+                                        image))])
+  )
+
 ; draw-blocks: ListOf<Block> Image --> Image
 (define (draw-blocks blocks image)
   (cond
@@ -90,7 +101,6 @@
                                       image))]
     )
   )
-    
 
 ; draw-walls: ListOf<Wall> Image --> Image
 (define (draw-walls walls image)
@@ -103,11 +113,12 @@
 ; draw-world: World --> Image
 ; Given a world state it returns the current representation of the ongoing game
 (define (draw-world w)
-  (draw-walls (world-walls w)
-  (place-image
-   (scale (/ (player-size (world-player w)) 100) PLAYER-SPRITE)
-   (player-x (world-player w)) (player-y (world-player w))
-   BACKGROUND))
+  (draw-bullets (world-bullets w)
+                (draw-walls (world-walls w)
+                            (place-image
+                             (scale (/ (player-size (world-player w)) 100) PLAYER-SPRITE)
+                             (player-x (world-player w)) (player-y (world-player w))
+                             BACKGROUND)))
   )
 
 ; mouse-handler: World x y Event --> World
@@ -135,7 +146,8 @@
       )
      (world-bullets w)
      (world-walls w)
-     (world-score w))
+     (world-score w)
+     (world-time w))
     )
   )
 
@@ -156,17 +168,37 @@
 (define (move-walls walls)
   (map move-blocks walls))
 
+; create-bullet: Pixel Pixel --> Bullet
+(define (create-bullet x y)
+  (make-bullet
+   x
+   y
+   -10
+   0)
+  )
+
+; shoot-bullets: World --> ListOf<Bullets>
+(define (shoot-bullets w)
+  (cond
+    [(= (modulo (world-time w) 60) 0)
+     (cons
+      (create-bullet (/ WIDTH 2) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10)))
+      (world-bullets w))]
+    [else w])
+  )
+
 ; animate-world: World --> World
 ; Given a world state, it return the walls with the updated position
 (define (animate-world w)
   (make-world
    (world-player w)
-   (world-bullets w)
+   (shoot-bullets w)
    (cond
      [(and (new-wall? (world-walls w)) (< (length (world-walls w)) 2)) (create-wall (world-walls w))]
      [(and (kill-wall? (world-walls w)) (> (length (world-walls w)) 1)) (delete-wall (world-walls w))]
      [else (move-walls (world-walls w))])
-   (world-score w))
+   (world-score w)
+   (add1 (world-time w)))
   )
 
 ; new-wall?: ListOf<Wall> --> Boolean
@@ -267,9 +299,11 @@
 (define INITIAL-STATE
   (make-world
    INITIAL-PLAYER
-   '()
+   (list
+    (create-bullet (/ WIDTH 2) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10))))
    (list
     EXAMPLE-WALL)
+   0
    0)
   )
 
