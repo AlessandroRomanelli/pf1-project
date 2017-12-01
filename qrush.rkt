@@ -173,18 +173,18 @@
   (make-bullet
    x
    y
-   -10
-   0)
+   0
+   -10)
   )
 
-; shoot-bullets: World --> ListOf<Bullets>
-(define (shoot-bullets w)
-  (cond
-    [(= (modulo (world-time w) 60) 0)
-     (cons
-      (create-bullet (/ WIDTH 2) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10)))
-      (world-bullets w))]
-    [else w])
+; move-bullets: ListOfBullets --> ListOfBullets
+(define (move-bullets bullets)
+  (map (lambda (bullet) (make-bullet
+                         (+ (bullet-x bullet) (bullet-dx bullet))
+                         (+ (bullet-y bullet) (bullet-dy bullet))
+                         (bullet-dx bullet)
+                         (bullet-dy bullet))) bullets
+       )
   )
 
 ; animate-world: World --> World
@@ -192,7 +192,12 @@
 (define (animate-world w)
   (make-world
    (world-player w)
-   (shoot-bullets w)
+   (cond
+     [(= (modulo (world-time w) 15) 0)
+      (cons
+       (create-bullet (player-x (world-player w)) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10)))
+       (world-bullets w))]
+     [else (move-bullets (world-bullets w))])
    (cond
      [(and (new-wall? (world-walls w)) (< (length (world-walls w)) 2)) (create-wall (world-walls w))]
      [(and (kill-wall? (world-walls w)) (> (length (world-walls w)) 1)) (delete-wall (world-walls w))]
