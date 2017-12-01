@@ -193,7 +193,7 @@
   (make-world
    (world-player w)
    (cond
-     [(= (modulo (world-time w) 15) 0)
+     [(= (modulo (world-time w) 9) 0)
       (cons
        (create-bullet (player-x (world-player w)) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10)))
        (world-bullets w))]
