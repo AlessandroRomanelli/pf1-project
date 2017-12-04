@@ -187,6 +187,65 @@
        )
   )
 
+; block-hit? ListOf<Block> ListOf<Bullet> --> Boolean
+; Given a list of blocks and bullets, return #true if a bullets hits a block, else #false
+(define (block-hit? blocks bullets)
+  (cond
+    [(empty? blocks) #false]
+    [(and
+      (<= (bullet-x (last bullets)) (+ (block-x (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-x (last bullets)) (- (block-x (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (<= (bullet-y (last bullets)) (+ (block-y (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-y (last bullets)) (- (block-y (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))) #true]
+    [else (block-hit? (rest blocks) bullets)])
+  )
+
+; find-block ListOf<Block> ListOf<Bullet> --> Block
+; Given a list of blocks and bullets, return the block being hit or empty list
+(define (find-block blocks bullets)
+  (cond
+    [(empty? blocks) '()]
+    [(and
+      (<= (bullet-x (last bullets)) (+ (block-x (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-x (last bullets)) (- (block-x (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (<= (bullet-y (last bullets)) (+ (block-y (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-y (last bullets)) (- (block-y (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))) (first blocks)]
+    [else (find-block (rest blocks) bullets)])
+  )
+
+; wall-hit? ListOf<Wall> ListOf<Bullet> --> Boolean
+; Given a list of walls and bullets, return #true if a bullet hits the wall, else #false
+(define (wall-hit? walls bullets)
+  (cond
+    [(empty? walls) #false]
+    [(block-hit? (first walls) bullets) #true]
+    [else (wall-hit? (rest walls)  bullets)])
+  )
+
+; block-hit ListOf<Wall> ListOf<Bullet> --> Block
+; Given a list of walls and bullets, return the block that was hit
+(define (block-hit walls bullets)
+  (cond
+    [(empty? walls) '()]
+    [(block? (find-block (first walls) bullets)) (find-block (first walls) bullets)]
+    [else (block-hit (rest walls)  bullets)])
+  )
+
+; wall-hit: ListOf<Wall> ListOf<Bullet> --> Wall
+; Given a list of walls and  bullets, return the wall that was hit
+(define (wall-hit walls bullets)
+  (cond
+    [(empty? walls) '()]
+    [(cons? (findf
+             (lambda (block) (= (block-x block) (block-x (block-hit walls bullets))))
+             (first walls))) (first walls)]
+    [else (wall-hit (rest walls) bullets)])
+  )
+
+; damage-wall: Wall Block ListOf<Wall> --> ListOf<Wall>
+; Given a hit wall, a hit block and a list of walls, it returns the updated list of walls
+
+
 ; animate-world: World --> World
 ; Given a world state, it return the walls with the updated position
 (define (animate-world w)
@@ -199,6 +258,10 @@
        (world-bullets w))]
      [else (move-bullets (world-bullets w))])
    (cond
+     [(wall-hit? (world-walls w) (world-bullets w))
+      (damage-wall (wall-hit (world-walls w) (world-bullets w))
+                   (block-hit (world-walls w) (world-bullets w))
+                   (world-walls w))]
      [(and (new-wall? (world-walls w)) (< (length (world-walls w)) 2)) (create-wall (world-walls w))]
      [(and (kill-wall? (world-walls w)) (> (length (world-walls w)) 1)) (delete-wall (world-walls w))]
      [else (move-walls (world-walls w))])
