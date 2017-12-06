@@ -188,29 +188,45 @@
        )
   )
 
+; check-block? Block ListOf<Bullet> --> Boolean
+(define (check-block? block bullets)
+  (cond
+    [(empty? bullets) #false]
+    [(and
+      (<= (bullet-x (last bullets)) (+ (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-x (last bullets)) (- (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (<= (bullet-y (last bullets)) (+ (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-y (last bullets)) (- (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))) #true]
+    [else (check-block? block (remove (last bullets) bullets))]))
+
 ; block-hit? ListOf<Block> ListOf<Bullet> --> Boolean
 ; Given a list of blocks and bullets, return #true if a bullets hits a block, else #false
 (define (block-hit? blocks bullets)
   (cond
     [(empty? blocks) #false]
-    [(and
-      (<= (bullet-x (last bullets)) (+ (block-x (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (>= (bullet-x (last bullets)) (- (block-x (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (<= (bullet-y (last bullets)) (+ (block-y (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (>= (bullet-y (last bullets)) (- (block-y (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))) #true]
+    [(check-block? (first blocks) bullets) #true]
     [else (block-hit? (rest blocks) bullets)])
   )
+
+; check-block Block ListOf<Bullet> --> Block
+(define (check-block block bullets)
+  (cond
+    [(empty? bullets) '()]
+    [(and
+      (<= (bullet-x (last bullets)) (+ (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-x (last bullets)) (- (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (<= (bullet-y (last bullets)) (+ (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-y (last bullets)) (- (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2))))
+     block]
+    [else (check-block block (remove (last bullets) bullets))]))
+  
 
 ; find-block ListOf<Block> ListOf<Bullet> --> Block
 ; Given a list of blocks and bullets, return the block being hit or empty list
 (define (find-block blocks bullets)
   (cond
     [(empty? blocks) '()]
-    [(and
-      (<= (bullet-x (last bullets)) (+ (block-x (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (>= (bullet-x (last bullets)) (- (block-x (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (<= (bullet-y (last bullets)) (+ (block-y (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (>= (bullet-y (last bullets)) (- (block-y (first blocks)) (/ WIDTH 10) (/ BULLET-SIZE 2)))) (first blocks)]
+    [(block? (check-block (first blocks) bullets)) (check-block (first blocks) bullets)]
     [else (find-block (rest blocks) bullets)])
   )
 
@@ -252,59 +268,68 @@
     [else (wall-hit (rest walls) bullets)])
   )
 
-; damage-wall: Wall Block ListOf<Wall> --> ListOf<Wall>
+; damage-wall: ListOf<Wall> ListOf<Bullets> --> ListOf<Wall>
 ; Given a hit wall, a hit block and a list of walls, it returns the updated list of walls
-(define (damage-wall hwall hblock walls)
+(define (damage-wall walls bullets)
   (local [(define hit-wall
-            (findf (lambda (wall) (equal? wall hwall)) walls))
+            (first walls))
           (define hit-block
-            (findf (lambda (block) (= (block-x block) (block-x hblock))) hwall))]
+            (block-hit walls bullets))]
     (move-walls
      (cons
       (remove-blocks
        (cons
         (make-block
-         (block-x hblock)
-         (block-y hblock)
-         (block-dy hblock)
-         (sub1 (block-hp hblock))
-         (block-state hblock))
+         (block-x hit-block)
+         (block-y hit-block)
+         (block-dy hit-block)
+         (sub1 (block-hp hit-block))
+         (block-state hit-block))
         (remove hit-block hit-wall)) '()) (remove hit-wall walls)))))
 
   
 ; remove-blocks: ListOf<Block> EmptyList --> ListOf<Block>
+; Given a list of walls, it deletes any block with less than 1 hp
 (define (remove-blocks blocks-old new)
   (cond
     [(empty? blocks-old) new]
-    [(<= (block-hp (first blocks-old)) 0) (remove-blocks (rest blocks-old) new)]
+    [(< (block-hp (first blocks-old)) 1) (remove-blocks (rest blocks-old) new)]
     [else (remove-blocks (rest blocks-old) (cons (first blocks-old) new))]))
 
 
 
 ; animate-world: World --> World
 ; Given a world state, it return the walls with the updated position
-(define (animate-world w)
+(define (animate-world world)
+  (local
+    [(define p (world-player world))
+     (define t (world-time world))
+     (define b (world-bullets world))
+     (define w (world-walls world))
+     (define s (world-score world))]
   (make-world
-   (world-player w)
+   p
    (cond
-     [(= (modulo (world-time w) 9) 0)
+     [(empty? b)
       (move-bullets (cons
-       (create-bullet (player-x (world-player w)) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10)))
-       (world-bullets w)))]
-     [(wall-hit? (world-walls w) (list (last (world-bullets w))))
-      (move-bullets (remove (find-bullet (world-bullets w) (world-walls w)) (world-bullets w)))]
-     [else (move-bullets (world-bullets w))])
+       (create-bullet (player-x p) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10))) b))]
+     [(= (modulo t 9) 0)
+      (move-bullets (cons
+       (create-bullet (player-x p) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10))) b))]
+     [(< (bullet-y (last b)) 0)
+      (move-bullets (remove (last b) b))]
+     [(wall-hit? w b)
+      (move-bullets (remove (find-bullet b w) b))]
+     [else (move-bullets b)])
    (cond
-     [(wall-hit? (world-walls w) (world-bullets w))
-      (damage-wall (wall-hit (world-walls w) (world-bullets w))
-                   (block-hit (world-walls w) (world-bullets w))
-                   (world-walls w))]
-     [(and (new-wall? (world-walls w)) (< (length (world-walls w)) 2)) (create-wall (world-walls w))]
-     [(and (kill-wall? (world-walls w)) (> (length (world-walls w)) 1)) (delete-wall (world-walls w))]
-     [else (move-walls (world-walls w))])
-   (world-score w)
-   (add1 (world-time w)))
-  )
+     [(wall-hit? w b)
+      (damage-wall w b)]
+     [(and (new-wall? w) (< (length w) 2)) (create-wall w)]
+     [(and (kill-wall? w) (> (length w) 1)) (delete-wall w)]
+     [else (move-walls w)])
+   s
+   (add1 t))
+  ))
 
 ; new-wall?: ListOf<Wall> --> Boolean
 ; Given a list of walls, returns #true if a wall is at the position ]
@@ -418,4 +443,3 @@
           [on-tick animate-world (/ 1 60)]
           [stop-when detect-collision]
           [on-mouse mouse-handler])
-
