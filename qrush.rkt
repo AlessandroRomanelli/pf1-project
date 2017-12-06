@@ -12,6 +12,7 @@
 
 (require 2htdp/image)
 (require 2htdp/universe)
+(require test-engine/racket-tests)
 
 (define HEIGHT 700)
 (define WIDTH (/ (* HEIGHT 9) 16))
@@ -213,6 +214,15 @@
     [else (find-block (rest blocks) bullets)])
   )
 
+; find-bullet ListOf<Bullet> ListOf<Wall> --> Bullet
+; Given a list of bullets, return the bullet that hit the wall
+(define (find-bullet bullets walls)
+  (cond [(empty? bullets) '()]
+        [(wall-hit? walls (list (last bullets))) (last bullets)]
+        [else (find-bullet (remove (last bullets) bullets) walls)]))
+
+
+  
 ; wall-hit? ListOf<Wall> ListOf<Bullet> --> Boolean
 ; Given a list of walls and bullets, return #true if a bullet hits the wall, else #false
 (define (wall-hit? walls bullets)
@@ -244,6 +254,31 @@
 
 ; damage-wall: Wall Block ListOf<Wall> --> ListOf<Wall>
 ; Given a hit wall, a hit block and a list of walls, it returns the updated list of walls
+(define (damage-wall hwall hblock walls)
+  (local [(define hit-wall
+            (findf (lambda (wall) (equal? wall hwall)) walls))
+          (define hit-block
+            (findf (lambda (block) (= (block-x block) (block-x hblock))) hwall))]
+    (move-walls
+     (cons
+      (remove-blocks
+       (cons
+        (make-block
+         (block-x hblock)
+         (block-y hblock)
+         (block-dy hblock)
+         (sub1 (block-hp hblock))
+         (block-state hblock))
+        (remove hit-block hit-wall)) '()) (remove hit-wall walls)))))
+
+  
+; remove-blocks: ListOf<Block> EmptyList --> ListOf<Block>
+(define (remove-blocks blocks-old new)
+  (cond
+    [(empty? blocks-old) new]
+    [(<= (block-hp (first blocks-old)) 0) (remove-blocks (rest blocks-old) new)]
+    [else (remove-blocks (rest blocks-old) (cons (first blocks-old) new))]))
+
 
 
 ; animate-world: World --> World
@@ -253,9 +288,11 @@
    (world-player w)
    (cond
      [(= (modulo (world-time w) 9) 0)
-      (cons
+      (move-bullets (cons
        (create-bullet (player-x (world-player w)) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10)))
-       (world-bullets w))]
+       (world-bullets w)))]
+     [(wall-hit? (world-walls w) (list (last (world-bullets w))))
+      (move-bullets (remove (find-bullet (world-bullets w) (world-walls w)) (world-bullets w)))]
      [else (move-bullets (world-bullets w))])
    (cond
      [(wall-hit? (world-walls w) (world-bullets w))
@@ -328,31 +365,31 @@
     (+ (* 0 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    100
+    1
     #f)
    (make-block
     (+ (* 1 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    100
+    1
     #f)
    (make-block
     (+ (* 2 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    100
+    1
     #f)
    (make-block
     (+ (* 3 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    100
+    1
     #f)
    (make-block
     (+ (* 4 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    100
+    1
     #f))
   )
    
