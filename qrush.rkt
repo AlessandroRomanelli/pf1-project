@@ -196,11 +196,11 @@
   (cond
     [(empty? bullets) #false]
     [(and
-      (<= (bullet-x (last bullets)) (+ (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (>= (bullet-x (last bullets)) (- (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (<= (bullet-y (last bullets)) (+ (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (>= (bullet-y (last bullets)) (- (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))) #true]
-    [else (check-block? block (remove (last bullets) bullets))]))
+      (<= (bullet-x (first bullets)) (+ (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-x (first bullets)) (- (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (<= (bullet-y (first bullets)) (+ (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-y (first bullets)) (- (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))) #true]
+    [else (check-block? block (rest bullets))]))
 
 ; block-hit? ListOf<Block> ListOf<Bullet> --> Boolean
 ; Given a list of blocks and bullets, return #true if a bullets hits a block, else #false
@@ -216,12 +216,12 @@
   (cond
     [(empty? bullets) '()]
     [(and
-      (<= (bullet-x (last bullets)) (+ (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (>= (bullet-x (last bullets)) (- (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (<= (bullet-y (last bullets)) (+ (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
-      (>= (bullet-y (last bullets)) (- (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2))))
+      (<= (bullet-x (first bullets)) (+ (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-x (first bullets)) (- (block-x block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (<= (bullet-y (first bullets)) (+ (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2)))
+      (>= (bullet-y (first bullets)) (- (block-y block) (/ WIDTH 10) (/ BULLET-SIZE 2))))
      block]
-    [else (check-block block (remove (last bullets) bullets))]))
+    [else (check-block block (rest bullets))]))
   
 
 ; find-block ListOf<Block> ListOf<Bullet> --> Block
@@ -237,8 +237,8 @@
 ; Given a list of bullets, return the bullet that hit the wall
 (define (find-bullet bullets walls)
   (cond [(empty? bullets) '()]
-        [(wall-hit? walls (list (last bullets))) (last bullets)]
-        [else (find-bullet (remove (last bullets) bullets) walls)]))
+        [(wall-hit? walls (list (first bullets))) (first bullets)]
+        [else (find-bullet (rest bullets) walls)]))
 
 
   
@@ -265,9 +265,7 @@
 (define (wall-hit walls bullets)
   (cond
     [(empty? walls) '()]
-    [(cons? (findf
-             (lambda (block) (= (block-x block) (block-x (block-hit walls bullets))))
-             (first walls))) (first walls)]
+    [(block-hit? (first walls) bullets) (first walls)]
     [else (wall-hit (rest walls) bullets)])
   )
 
@@ -275,7 +273,7 @@
 ; Given a hit wall, a hit block and a list of walls, it returns the updated list of walls
 (define (damage-wall walls bullets)
   (local [(define hit-wall
-            (first walls))
+            (wall-hit walls bullets))
           (define hit-block
             (block-hit walls bullets))]
     (move-walls
@@ -296,7 +294,7 @@
 (define (remove-blocks blocks-old new)
   (cond
     [(empty? blocks-old) new]
-    [(< (block-hp (first blocks-old)) 1) (remove-blocks (rest blocks-old) new)]
+    [(<= (block-hp (first blocks-old)) 0) (remove-blocks (rest blocks-old) new)]
     [else (remove-blocks (rest blocks-old) (cons (first blocks-old) new))]))
 
 
@@ -330,7 +328,9 @@
      [(and (new-wall? w) (< (length w) 2)) (create-wall w)]
      [(and (kill-wall? w) (> (length w) 1)) (delete-wall w)]
      [else (move-walls w)])
-   s
+   (if (wall-hit? w b)
+       (add1 s)
+       s)
    (add1 t))
   ))
 

@@ -1,0 +1,13 @@
+
+*.aux
+.DS_Store
+.DS_Store
+*.fdb_latexmk
+*.log
+*.fls
+*.pdf
+*.gz
+*.toc
+*.rkt~
+qrush.rkt~
+qrush.rkt~
