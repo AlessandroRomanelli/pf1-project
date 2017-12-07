@@ -97,7 +97,7 @@
   (cond
     [(empty? blocks) image]
     [else (draw-blocks (rest blocks) (place-image
-                                      (text "RomaGay" 15 "white")
+                                      (text (number->string (block-hp (first blocks))) 20 "white")
                                       (block-x (first blocks)) (block-y (first blocks))
                                       (place-image
                                        (square BLOCK-SIZE "solid" "green")
