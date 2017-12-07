@@ -97,9 +97,12 @@
   (cond
     [(empty? blocks) image]
     [else (draw-blocks (rest blocks) (place-image
-                                      (square BLOCK-SIZE "solid" "green")
+                                      (text "RomaGay" 15 "white")
                                       (block-x (first blocks)) (block-y (first blocks))
-                                      image))]
+                                      (place-image
+                                       (square BLOCK-SIZE "solid" "green")
+                                       (block-x (first blocks)) (block-y (first blocks))
+                                       image)))]
     )
   )
 
@@ -390,31 +393,31 @@
     (+ (* 0 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    1
+    (+ 1 (random 8))
     #f)
    (make-block
     (+ (* 1 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    1
+    (+ 1 (random 8))
     #f)
    (make-block
     (+ (* 2 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    1
+    (+ 1 (random 8))
     #f)
    (make-block
     (+ (* 3 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    1
+    (+ 1 (random 8))
     #f)
    (make-block
     (+ (* 4 (/ WIDTH 5)) (/ WIDTH 10))
     (floor (- 0 (/ WIDTH 5)))
     5
-    1
+    (+ 1 (random 8))
     #f))
   )
    
