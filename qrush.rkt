@@ -189,7 +189,7 @@
   (map (lambda (block) (make-block
                         (block-x block)
                         (+ (block-y block) (block-dy block))
-                        (+ (- (log (/ 1 (expt (/ t 60) 2)))) 3)
+                        (+ (- (log (/ 1 (expt (/ t 60) 2)))) 1.8)
                         (block-hp block)
                         (block-state block)))
        blocks)
