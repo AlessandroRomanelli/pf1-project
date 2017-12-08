@@ -12,7 +12,12 @@
 
 (require 2htdp/image)
 (require 2htdp/universe)
-(require test-engine/racket-tests)
+(require rsound)
+
+(define song (rs-read "dryout.wav"))
+(play song)
+
+
 
 (define HEIGHT 700)
 (define WIDTH (/ (* HEIGHT 9) 16))
@@ -397,7 +402,12 @@
 ; Given a world state, returns #true if there was a collision between the player and a block
 (define (detect-collision w)
   (check-collision (last (world-walls w)) (world-player w))
+  
   )
+
+; Why this is not working? I want to stop the song when collision returns true
+(define (stop-song)
+  ((when (detect-collision)(stop))))
 
 ; check-collision: ListOf<Block> Player --> Boolean
 ; Given a list of blocks and a player, returns #true if there was a collision
