@@ -97,14 +97,39 @@
   (cond
     [(empty? blocks) image]
     [else (draw-blocks (rest blocks) (place-image
-                                      (text (number->string (block-hp (first blocks))) 20 "white")
+                                      (text (number->string (inexact->exact (block-hp (first blocks)))) 20 "white")
                                       (block-x (first blocks)) (block-y (first blocks))
                                       (place-image
-                                       (square BLOCK-SIZE "solid" "green")
+                                       (square BLOCK-SIZE "solid" (pick-color
+                                                                   1
+                                                                   15
+                                                                   (block-hp (first blocks))))
                                        (block-x (first blocks)) (block-y (first blocks))
-                                       image)))]
-    )
-  )
+                                       image)))]))
+
+; pick-color: PosInt PosInt HP --> String
+; Given a min and a max and a block, returns the color of the block
+(define (pick-color min max hp)
+  (local [(define width
+            (- max min))]
+  (cond
+    [(and
+      (>= hp min)
+      (<= hp (+ (/ width 5) min))) "DodgerBlue"]
+    [(and
+      (> hp (+ (/ width 5) min))
+      (<= hp (+ (* (/ width 5) 2) min))) "LawnGreen"]
+    [(and
+      (> hp (+ (* (/ width 5) 2) min))
+      (<= hp (+ (* (/ width 5) 3) min))) "Gold"]
+    [(and
+      (> hp (+ (* (/ width 5) 3) min))
+      (<= hp (+ (* (/ width 5) 4) min))) "DarkOrange"]
+    [(and
+      (> hp (+ (* (/ width 5) 4) min))
+      (<= hp max)) "OrangeRed"]
+    [(> hp max) "Red"])))
+  
 
 ; draw-walls: ListOf<Wall> Image --> Image
 (define (draw-walls walls image)
@@ -117,12 +142,15 @@
 ; draw-world: World --> Image
 ; Given a world state it returns the current representation of the ongoing game
 (define (draw-world w)
-  (draw-bullets (world-bullets w)
-                (draw-walls (world-walls w)
-                            (place-image
-                             (scale (/ (player-size (world-player w)) 100) PLAYER-SPRITE)
-                             (player-x (world-player w)) (player-y (world-player w))
-                             BACKGROUND)))
+  (place-image
+   (text (string-append "Score: " (number->string (world-score w))) 30 "white")
+   (/ WIDTH 2) (/ WIDTH 10)
+   (draw-bullets (world-bullets w)
+                 (draw-walls (world-walls w)
+                             (place-image
+                              (scale (/ (player-size (world-player w)) 100) PLAYER-SPRITE)
+                              (player-x (world-player w)) (player-y (world-player w))
+                              BACKGROUND))))
   )
 
 ; mouse-handler: World x y Event --> World
@@ -155,22 +183,22 @@
     )
   )
 
-; move-blocks: ListOf<Block> --> ListOf<Block>
+; move-blocks: ListOf<Block> Time --> ListOf<Block>
 ; Given a list of blocks, it returns a list of blocks with all its elements with updated position
-(define (move-blocks blocks)
+(define (move-blocks blocks t)
   (map (lambda (block) (make-block
                         (block-x block)
                         (+ (block-y block) (block-dy block))
-                        (block-dy block)
+                        (+ (- (log (/ 1 (expt (/ t 60) 2)))) 3)
                         (block-hp block)
                         (block-state block)))
        blocks)
   )
 
-; move-walls: ListOf<Wall> --> ListOf<Wall>
+; move-walls: ListOf<Wall> Time --> ListOf<Wall>
 ; Given a list of walls it returns an updated list of walls
-(define (move-walls walls)
-  (map move-blocks walls))
+(define (move-walls walls t)
+  (map (lambda (x) (move-blocks x t)) walls))
 
 ; create-bullet: Pixel Pixel --> Bullet
 (define (create-bullet x y)
@@ -269,9 +297,9 @@
     [else (wall-hit (rest walls) bullets)])
   )
 
-; damage-wall: ListOf<Wall> ListOf<Bullets> --> ListOf<Wall>
+; damage-wall: ListOf<Wall> ListOf<Bullets> Time --> ListOf<Wall>
 ; Given a hit wall, a hit block and a list of walls, it returns the updated list of walls
-(define (damage-wall walls bullets)
+(define (damage-wall walls bullets t)
   (local [(define hit-wall
             (wall-hit walls bullets))
           (define hit-block
@@ -286,7 +314,7 @@
          (block-dy hit-block)
          (sub1 (block-hp hit-block))
          (block-state hit-block))
-        (remove hit-block hit-wall)) '()) (remove hit-wall walls)))))
+        (remove hit-block hit-wall)) '()) (remove hit-wall walls)) t)))
 
   
 ; remove-blocks: ListOf<Block> EmptyList --> ListOf<Block>
@@ -324,10 +352,10 @@
      [else (move-bullets b)])
    (cond
      [(wall-hit? w b)
-      (damage-wall w b)]
-     [(and (new-wall? w) (< (length w) 2)) (create-wall w)]
-     [(and (kill-wall? w) (> (length w) 1)) (delete-wall w)]
-     [else (move-walls w)])
+      (damage-wall w b t)]
+     [(and (new-wall? w) (< (length w) 2)) (create-wall w t)]
+     [(and (kill-wall? w) (> (length w) 1)) (delete-wall w t)]
+     [else (move-walls w t)])
    (if (wall-hit? w b)
        (add1 s)
        s)
@@ -340,7 +368,7 @@
 (define (new-wall? walls)
   (cond
     [(empty? walls) #false]
-    [(> (block-y (first (last walls))) (ceiling (/ HEIGHT 1.75))) #true]
+    [(and (cons? (last walls)) (> (block-y (first (last walls))) (ceiling (/ HEIGHT 1.75)))) #true]
     [else (new-wall? (rest walls))])
   )
 
@@ -349,20 +377,20 @@
 (define (kill-wall? walls)
   (cond
     [(empty? walls) #false]
-    [(> (block-y (first (last walls))) (ceiling (+ HEIGHT (/ WIDTH 10)))) #true]
+    [(and (cons? (last walls)) (> (block-y (first (last walls))) (ceiling (+ HEIGHT (/ WIDTH 10))))) #true]
     [else (kill-wall? (rest walls))])
   )
 
-; create-wall: ListOf<Wall> --> ListOf<Wall>
-; Given a list of wall, inserts a new wall
-(define (create-wall walls)
-  (move-walls (cons EXAMPLE-WALL walls))
+; create-wall: ListOf<Wall> Time --> ListOf<Wall>
+; Given a list of walls and a time, inserts a new wall
+(define (create-wall walls t)
+  (move-walls (cons (generate-wall t) walls) t)
   )
 
 ; delete-wall: ListOf<Wall> --> ListOf<Wall>
 ; Given a list of wall, deletes the oldest wall
-(define (delete-wall walls)
-  (move-walls (remove (last walls) walls))
+(define (delete-wall walls t)
+  (move-walls (remove (last walls) walls) t)
   )
 
 ; detect-collision: World --> Boolean
@@ -387,38 +415,23 @@
     )
   )
 
+; create-block: PosInt Time --> Block
+; Given a number (order) and the time elapsed, creates a block with more and more health as the time goes by.
+(define (create-block n t)
+  (make-block
+   (+ (* n (/ WIDTH 5)) (/ WIDTH 10))
+   (floor (- 0 (/ WIDTH 5)))
+   (+ (- (log (/ 1 (expt (/ t 60) 2)))) 3)
+   (ceiling (* (random) (ceiling (* 5 (log (sqrt (/ t 60)))))))
+   #f))
+; generate-wall Time --> ListOf<Block>
+; Given the time elapsed, creates a new wall made up by smaller blocks.
+(define (generate-wall t)
+  (build-list 5 (lambda (x) (create-block x t))))
+    
+
 (define EXAMPLE-WALL
-  (list
-   (make-block
-    (+ (* 0 (/ WIDTH 5)) (/ WIDTH 10))
-    (floor (- 0 (/ WIDTH 5)))
-    5
-    (+ 1 (random 8))
-    #f)
-   (make-block
-    (+ (* 1 (/ WIDTH 5)) (/ WIDTH 10))
-    (floor (- 0 (/ WIDTH 5)))
-    5
-    (+ 1 (random 8))
-    #f)
-   (make-block
-    (+ (* 2 (/ WIDTH 5)) (/ WIDTH 10))
-    (floor (- 0 (/ WIDTH 5)))
-    5
-    (+ 1 (random 8))
-    #f)
-   (make-block
-    (+ (* 3 (/ WIDTH 5)) (/ WIDTH 10))
-    (floor (- 0 (/ WIDTH 5)))
-    5
-    (+ 1 (random 8))
-    #f)
-   (make-block
-    (+ (* 4 (/ WIDTH 5)) (/ WIDTH 10))
-    (floor (- 0 (/ WIDTH 5)))
-    5
-    (+ 1 (random 8))
-    #f))
+  (generate-wall 300)
   )
    
 
@@ -437,7 +450,7 @@
    (list
     EXAMPLE-WALL)
    0
-   0)
+   1)
   )
 
 
