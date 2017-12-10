@@ -15,7 +15,7 @@
 (require rsound)
 
 (define song (rs-read "dryout.wav"))
-
+;(play song)
 
 
 (define HEIGHT 700)
@@ -39,15 +39,18 @@
 (define PLAYER-SPRITE
   (square BLOCK-SIZE "solid" "cyan"))
 
-; WorldState is a (make-world player bullets walls score time) where:
+; WorldState is a (make-world player bullets walls score time pause) where:
 ; - player is a Player
 ; - bullets is a ListOf<Bullet>
 ; - walls is a ListOf<Wall>
 ; - score is a PosInt
 ; - time is a PosInt
+; - record is a PosInt
+; - last is a PosInt
+; - pause is a Boolean
 ; Intrpr: It is the current state of the world at any given time during our
 ; big bang application
-(define-struct world [player bullets walls score time record])
+(define-struct world [player bullets walls score time record last pause])
 
 ; Player is a (make-player size x y) where:
 ; - size is a PosInt
@@ -100,16 +103,19 @@
 (define (draw-blocks blocks image)
   (cond
     [(empty? blocks) image]
-    [else (draw-blocks (rest blocks) (place-image
-                                      (text (number->string (inexact->exact (block-hp (first blocks)))) 20 "white")
-                                      (block-x (first blocks)) (block-y (first blocks))
-                                      (place-image
-                                       (square BLOCK-SIZE "solid" (pick-color
-                                                                   1
-                                                                   15
-                                                                   (block-hp (first blocks))))
-                                       (block-x (first blocks)) (block-y (first blocks))
-                                       image)))]))
+    [else (draw-blocks (rest blocks)
+                       (place-image
+                        (if (> (block-hp (first blocks)) 15)
+                            (empty-scene 1 1)
+                            (text (number->string (inexact->exact (block-hp (first blocks)))) 20 "white"))
+                        (block-x (first blocks)) (block-y (first blocks))
+                        (place-image
+                         (square BLOCK-SIZE "solid" (pick-color
+                                                     1
+                                                     16
+                                                     (block-hp (first blocks))))
+                         (block-x (first blocks)) (block-y (first blocks))
+                         image)))]))
 
 ; pick-color: PosInt PosInt HP --> String
 ; Given a min and a max and a block, returns the color of the block
@@ -132,7 +138,7 @@
     [(and
       (> hp (+ (* (/ width 5) 4) min))
       (<= hp max)) "OrangeRed"]
-    [(> hp max) "Red"])))
+    [(> hp max) "LightSlateGray"])))
   
 
 ; draw-walls: ListOf<Wall> Image --> Image
@@ -147,17 +153,20 @@
 ; Given a world state it returns the current representation of the ongoing game
 (define (draw-world w)
   (place-image
-   (text (string-append "Record: " (number->string (world-record w))) 10 "white")
-   (- WIDTH (/ WIDTH 4)) (/ WIDTH 10)
+   (text (string-append "Previous: " (number->string (world-last w))) 10 "white")
+   (/ WIDTH 4) (/ WIDTH 10)
    (place-image
-    (text (string-append "Score: " (number->string (world-score w))) 30 "white")
-    (/ WIDTH 2) (/ WIDTH 10)
-    (draw-bullets (world-bullets w)
-                  (draw-walls (world-walls w)
-                              (place-image
-                               (scale (/ (player-size (world-player w)) 100) PLAYER-SPRITE)
-                               (player-x (world-player w)) (player-y (world-player w))
-                               BACKGROUND))))))
+    (text (string-append "Record: " (number->string (world-record w))) 10 "white")
+    (- WIDTH (/ WIDTH 4)) (/ WIDTH 10)
+    (place-image
+     (text (string-append "Score: " (number->string (world-score w))) 30 "white")
+     (/ WIDTH 2) (/ WIDTH 10)
+     (draw-bullets (world-bullets w)
+                   (draw-walls (world-walls w)
+                               (place-image
+                                (scale (/ (player-size (world-player w)) 100) PLAYER-SPRITE)
+                                (player-x (world-player w)) (player-y (world-player w))
+                                BACKGROUND)))))))
 
 ; mouse-handler: World x y Event --> World
 ; Given a world state, two mouse coordinates and an event, it returns a new updated world
@@ -186,7 +195,9 @@
      (world-walls w)
      (world-score w)
      (world-time w)
-     (world-record w))
+     (world-record w)
+     (world-last w)
+     (world-pause w))
     )
   )
 
@@ -196,7 +207,7 @@
   (map (lambda (block) (make-block
                         (block-x block)
                         (+ (block-y block) (block-dy block))
-                        (+ (- (log (/ 1 (expt (/ t 60) 2)))) 1.8)
+                        (log (+ (expt (/ t 60) 2) 10))
                         (block-hp block)
                         (block-state block)))
        blocks)
@@ -312,16 +323,17 @@
           (define hit-block
             (block-hit walls bullets))]
     (move-walls
-     (cons
-      (remove-blocks
-       (cons
-        (make-block
-         (block-x hit-block)
-         (block-y hit-block)
-         (block-dy hit-block)
-         (sub1 (block-hp hit-block))
-         (block-state hit-block))
-        (remove hit-block hit-wall)) '()) (remove hit-wall walls)) t)))
+     (remove-wall
+      (cons
+       (remove-blocks
+        (cons
+         (make-block
+          (block-x hit-block)
+          (block-y hit-block)
+          (block-dy hit-block)
+          (sub1 (block-hp hit-block))
+          (block-state hit-block))
+         (remove hit-block hit-wall)) '()) (remove hit-wall walls)) '()) t)))
 
   
 ; remove-blocks: ListOf<Block> EmptyList --> ListOf<Block>
@@ -329,18 +341,26 @@
 (define (remove-blocks blocks-old new)
   (cond
     [(empty? blocks-old) new]
-    [(<= (block-hp (first blocks-old)) 0) (remove-blocks (rest blocks-old) new)]
+    [(< (block-hp (first blocks-old)) 1) (remove-blocks (rest blocks-old) new)]
     [else (remove-blocks (rest blocks-old) (cons (first blocks-old) new))]))
 
+; remove-wall: ListOf<Wall> EmptyList --> ListOf<Wall>
+(define (remove-wall walls-old new)
+  (cond
+    [(empty? walls-old) new]
+    [(empty? (first walls-old)) (remove-wall (rest walls-old) new)]
+    [else (remove-wall (rest walls-old) (cons (first walls-old) new))]))
 
 
 ; animate-world: World --> World
 ; Given a world state, it return the walls with the updated position
 (define (animate-world w)
   (if (check-wall-collision (world-walls w) (world-player w))
-      (if (> (world-score w) (world-record w))
-          (new-game (world-score w))
-          (new-game (world-record w)))
+      (begin
+        (stop)
+        (if (> (world-score w) (world-record w))
+            (new-game (world-time w) (world-score w) (world-score w))
+            (new-game (world-time w) (world-record w) (world-score w))))
       (make-world
        (world-player w)
        (animate-bullets (world-player w) (world-time w) (world-bullets w) (world-walls w))
@@ -349,22 +369,35 @@
            (add1 (world-score w))
            (world-score w))
        (add1 (world-time w))
-       (world-record w))))
+       (world-record w)
+       (world-last w)
+       (world-pause w))))
 
 ; animate-bullets: Player Time ListOf<Bullet> ListOf<Wall> --> ListOf<Bullet>
 (define (animate-bullets player time bullets walls)
    (cond
-     [(empty? bullets)
+     [(spawn-time time)
       (move-bullets (cons
        (create-bullet (player-x player) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10))) bullets))]
-     [(= (modulo time 9) 0)
-      (move-bullets (cons
-       (create-bullet (player-x player) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10))) bullets))]
-     [(< (bullet-y (last bullets)) 0)
+     [(and (cons? bullets) (< (bullet-y (last bullets)) 0))
       (move-bullets (remove (last bullets) bullets))]
      [(wall-hit? walls bullets)
       (move-bullets (remove (find-bullet bullets walls) bullets))]
      [else (move-bullets bullets)]))
+
+; spawn-time: Time --> Boolean
+; Given a time, returns true if it is time to spawn a new bullet
+(define (spawn-time time)
+  (cond
+    [(and (> time 0) (<= time 900))
+     (= (modulo time 20) 0)]
+    [(and (> time 900) (<= time 3600))
+     (= (modulo time 15) 0)]
+    [(and (> time 3600) (<= time 10800))
+     (= (modulo time 10) 0)]
+    [(and (> time 10800) (<= time 36000))
+     (= (modulo time 5) 0)]
+    [else (= (modulo time 1))]))
 
 ; animate-walls: Time ListOf<Bullet> ListOf<Wall> --> ListOf<Wall>
 (define (animate-walls time bullets walls)
@@ -372,14 +405,14 @@
     [(wall-hit? walls bullets)
      (damage-wall walls bullets time)]
     [(and (new-wall? walls time) (< (length walls) 2)) (create-wall walls time)]
-    [(and (kill-wall? walls) (> (length walls) 1)) (delete-wall walls time)]
+    [(wall-too-low? walls) (delete-wall walls '() time)]
     [else (move-walls walls time)]))
 
 ; new-wall?: ListOf<Wall> Time --> Boolean
 ; Given a list of walls, returns #true if a wall is at the position ]
 ; where a new one should be spawned at the top of the screen
 (define (new-wall? walls time)
-  (or (wall-exit? walls) (and (= (modulo time 300) 0) (empty? walls))))
+  (or (empty? walls) (wall-exit? walls)))
 
 ; wall-exit?: ListOf<Wall> --> Boolean
 (define (wall-exit? walls)
@@ -395,13 +428,21 @@
     [(> (block-y (first blocks)) (ceiling (/ HEIGHT 1.75))) #true]
     [else (block-exit? (rest blocks))]))
 
-; kill-wall?: ListOf<Wall> --> Boolean
-; Given a list of walls, returns #true if a wall exits the frame
-(define (kill-wall? walls)
+; wall-too-low?: ListOf<Wall> --> Boolean
+(define (wall-too-low? walls)
   (cond
     [(empty? walls) #false]
-    [(and (cons? (last walls)) (> (block-y (first (last walls))) (ceiling (+ HEIGHT (/ WIDTH 10))))) #true]
-    [else (kill-wall? (rest walls))]))
+    [(block-too-low? (first walls)) #true]
+    [else (wall-too-low? (rest walls))]))
+
+; block-too-low? : ListOf<Block> --> Boolean
+(define (block-too-low? blocks)
+  (cond
+    [(empty? blocks) #false]
+    [(> (block-y (first blocks)) (ceiling (+ HEIGHT (/ WIDTH 10)))) #true]
+    [else (block-too-low? (rest blocks))]))
+    
+    
 
 ; create-wall: ListOf<Wall> Time --> ListOf<Wall>
 ; Given a list of walls and a time, inserts a new wall
@@ -409,11 +450,13 @@
   (move-walls (cons (generate-wall t) walls) t)
   )
 
-; delete-wall: ListOf<Wall> --> ListOf<Wall>
+; delete-wall: ListOf<Wall> EmptyList Time --> ListOf<Wall>
 ; Given a list of wall, deletes the oldest wall
-(define (delete-wall walls t)
-  (move-walls (remove (last walls) walls) t)
-  )
+(define (delete-wall walls new t)
+  (cond
+    [(empty? walls) new]
+    [(wall-too-low? (list (first walls))) (delete-wall (rest walls) new t)]
+    [else (delete-wall (rest walls) (cons (first walls) new) t)]))
 
 ; check-wall-collision: ListOf<Wall> Player --> Boolean
 (define (check-wall-collision walls player)
@@ -445,18 +488,15 @@
   (make-block
    (+ (* n (/ WIDTH 5)) (/ WIDTH 10))
    (floor (- 0 (/ WIDTH 5)))
-   (+ (- (log (/ 1 (expt (/ t 60) 2)))) 3)
-   (ceiling (* (random) (ceiling (* 5 (log (sqrt (/ t 60)))))))
+   (- 0 (* 3 (log (/ 1 (* 2 (/ t 60))))))
+   (if (< (* (random) 50) 1)
+       1000
+       (ceiling (* (random) (abs (ceiling (log (/ t 60)))))))
    #f))
 ; generate-wall Time --> ListOf<Block>
 ; Given the time elapsed, creates a new wall made up by smaller blocks.
 (define (generate-wall t)
   (build-list 5 (lambda (x) (create-block x t))))
-    
-
-(define EXAMPLE-WALL
-  (generate-wall 300)
-  )
    
 
 (define INITIAL-PLAYER
@@ -466,21 +506,23 @@
    (- HEIGHT (/ WIDTH 5)))
   )
 
-; new-game: Record --> WorldState
-(define (new-game record)
+; new-game: Time Record Last --> WorldState
+(define (new-game time record last)
   (make-world
    INITIAL-PLAYER
    (list
     (create-bullet (/ WIDTH 2) (- HEIGHT (/ WIDTH 5) (/ WIDTH 10))))
    (list
-    EXAMPLE-WALL)
+    (generate-wall time))
    0
-   1
-   record)
+   120
+   record
+   last
+   #false)
   )
 
 
-(big-bang (new-game 0)
+(big-bang (new-game 120 0 0)
           [to-draw draw-world]
           [on-tick animate-world (/ 1 60)]
           ;[stop-when detect-collision]
