@@ -14,8 +14,8 @@
 (require 2htdp/universe)
 (require rsound)
 
-(define song (rs-read "dryout.wav"))
-;(play song)
+(define song (rs-read "Theory_Of_Everything.wav"))
+(play song)
 
 
 (define HEIGHT 700)
@@ -391,11 +391,11 @@
   (cond
     [(and (> time 0) (<= time 900))
      (= (modulo time 20) 0)]
-    [(and (> time 900) (<= time 3600))
+    [(and (> time 900) (<= time 3000))
      (= (modulo time 15) 0)]
-    [(and (> time 3600) (<= time 10800))
+    [(and (> time 3000) (<= time 10200))
      (= (modulo time 10) 0)]
-    [(and (> time 10800) (<= time 36000))
+    [(and (> time 10200) (<= time 32000))
      (= (modulo time 5) 0)]
     [else (= (modulo time 1))]))
 
@@ -489,7 +489,7 @@
    (+ (* n (/ WIDTH 5)) (/ WIDTH 10))
    (floor (- 0 (/ WIDTH 5)))
    (- 0 (* 3 (log (/ 1 (* 2 (/ t 60))))))
-   (if (< (* (random) 50) 1)
+   (if (< (* (random) 5) 1)
        1000
        (ceiling (* (random) (abs (ceiling (log (/ t 60)))))))
    #f))
