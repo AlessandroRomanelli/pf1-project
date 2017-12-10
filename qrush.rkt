@@ -14,9 +14,13 @@
 (require 2htdp/universe)
 (require rsound)
 
-(define song (rs-read "Theory_Of_Everything.wav"))
-(play song)
+(define song1 (rs-read "Theory_Of_Everything.wav"))
+(define song2 (rs-read "dryout.wav"))
 
+(define playlist (list song1 song2))
+
+(pstream-play (make-pstream #:buffer-time 0.900)
+              (list-ref playlist (inexact->exact (floor (* (random) (length playlist))))))
 
 (define HEIGHT 700)
 (define WIDTH (/ (* HEIGHT 9) 16))
@@ -47,9 +51,9 @@
 ; - time is a PosInt
 ; - record is a PosInt
 ; - last is a PosInt
-; - pause is a Boolean
+; - state is a GameState
 ; Intrpr: It is the current state of the world at any given time during our
-; big bang application
+; big bang application, holding all the key information relevant to the world
 (define-struct world [player bullets walls score time record last pause])
 
 ; Player is a (make-player size x y) where:
@@ -67,15 +71,6 @@
 ; Intrpr: It is the single bullet being fired by the player
 (define-struct bullet [x y dx dy])
 
-; Pixel is a PosInt
-; Intrpr: It is a single component of a position in a image
-
-; Speed is a Int
-; Intrpr: It is the change in position over time
-
-; Wall is a ListOf<Block>
-; Intrpr: It is a single row of blocks coming towards the player
-
 ; Block is a (make-block x y dy hp state) where:
 ; - x is a Pixel
 ; - y is a Pixel
@@ -85,6 +80,22 @@
 ; Intrpr: It is the smallest unit of a wall, with a position, a vertical speed, health and a
 ; state if the block is special else #false.
 (define-struct block [x y dy hp state])
+
+; Pixel is a PosInt
+; Intrpr: It is a single component of a position in a image
+
+; Speed is a Int
+; Intrpr: It is the change in position over time
+
+; Wall is a ListOf<Block>
+; Intrpr: It is a single row of blocks coming towards the player
+
+; GameState is one of:
+; - 0: for the main-menu
+; - 1: for when the game starts
+; - 2: for when the game is over
+; - 3: for when the game is paused
+; Intrpr: it is the current state of the game
 
 ; Score is a PosInt
 ; Intpr: it is the score held by the player
@@ -96,26 +107,30 @@
     [else (draw-bullets (rest bullets) (place-image
                                         (circle BULLET-SIZE "solid" "white")
                                         (bullet-x (first bullets)) (bullet-y (first bullets))
-                                        image))])
-  )
+                                        image))]))
 
 ; draw-blocks: ListOf<Block> Image --> Image
 (define (draw-blocks blocks image)
   (cond
     [(empty? blocks) image]
-    [else (draw-blocks (rest blocks)
-                       (place-image
-                        (if (> (block-hp (first blocks)) 15)
-                            (empty-scene 1 1)
-                            (text (number->string (inexact->exact (block-hp (first blocks)))) 20 "white"))
-                        (block-x (first blocks)) (block-y (first blocks))
-                        (place-image
-                         (square BLOCK-SIZE "solid" (pick-color
-                                                     1
-                                                     16
-                                                     (block-hp (first blocks))))
-                         (block-x (first blocks)) (block-y (first blocks))
-                         image)))]))
+    [else (draw-blocks
+           (rest blocks)
+           (draw-block (first blocks) image))]))
+
+; draw-block: Block Image --> Image
+(define (draw-block block image)
+  (place-image
+   (if (> (block-hp block) 15)
+       (empty-scene 0 0)
+       (text (number->string (inexact->exact (block-hp block))) 20 "white"))
+   (block-x block) (block-y block)
+   (place-image
+    (square BLOCK-SIZE "solid" (pick-color
+                                1
+                                16
+                                (block-hp block)))
+    (block-x block) (block-y block)
+    image)))
 
 ; pick-color: PosInt PosInt HP --> String
 ; Given a min and a max and a block, returns the color of the block
@@ -125,18 +140,18 @@
   (cond
     [(and
       (>= hp min)
-      (<= hp (+ (/ width 5) min))) "DodgerBlue"]
+      (<= hp (+ 1 min))) "DodgerBlue"]
     [(and
-      (> hp (+ (/ width 5) min))
-      (<= hp (+ (* (/ width 5) 2) min))) "LawnGreen"]
+      (> hp (+ 1 min))
+      (<= hp (+ 3 min))) "LawnGreen"]
     [(and
-      (> hp (+ (* (/ width 5) 2) min))
-      (<= hp (+ (* (/ width 5) 3) min))) "Gold"]
+      (> hp (+ 3 min))
+      (<= hp (+ 5 min))) "Gold"]
     [(and
-      (> hp (+ (* (/ width 5) 3) min))
-      (<= hp (+ (* (/ width 5) 4) min))) "DarkOrange"]
+      (> hp (+ 5 min))
+      (<= hp (+ 7 min))) "DarkOrange"]
     [(and
-      (> hp (+ (* (/ width 5) 4) min))
+      (> hp (+ 7 min))
       (<= hp max)) "OrangeRed"]
     [(> hp max) "LightSlateGray"])))
   
@@ -145,9 +160,7 @@
 (define (draw-walls walls image)
   (cond
     [(empty? walls) image]
-    [else (draw-walls (rest walls) (draw-blocks (first walls) image))]
-    )
-  )
+    [else (draw-walls (rest walls) (draw-blocks (first walls) image))]))
 
 ; draw-world: World --> Image
 ; Given a world state it returns the current representation of the ongoing game
@@ -197,9 +210,7 @@
      (world-time w)
      (world-record w)
      (world-last w)
-     (world-pause w))
-    )
-  )
+     (world-pause w))))
 
 ; move-blocks: ListOf<Block> Time --> ListOf<Block>
 ; Given a list of blocks, it returns a list of blocks with all its elements with updated position
@@ -358,11 +369,13 @@
   (if (check-wall-collision (world-walls w) (world-player w))
       (begin
         (stop)
+        (pstream-play (make-pstream #:buffer-time 0.900)
+                      (list-ref playlist (inexact->exact (floor (* (random) (length playlist))))))
         (if (> (world-score w) (world-record w))
             (new-game (world-time w) (world-score w) (world-score w))
             (new-game (world-time w) (world-record w) (world-score w))))
       (make-world
-       (world-player w)
+       (animate-player (world-player w) (world-time w))
        (animate-bullets (world-player w) (world-time w) (world-bullets w) (world-walls w))
        (animate-walls (world-time w) (world-bullets w) (world-walls w))
        (if (wall-hit? (world-walls w) (world-bullets w))
@@ -372,6 +385,13 @@
        (world-record w)
        (world-last w)
        (world-pause w))))
+
+; animate-player: Player Time --> Player
+(define (animate-player player time)
+  (make-player
+   (+ (* 1/16 (sqrt time) (cos (* 1/8 time)) (log time)) 50)
+   (player-x player)
+   (player-y player)))
 
 ; animate-bullets: Player Time ListOf<Bullet> ListOf<Wall> --> ListOf<Bullet>
 (define (animate-bullets player time bullets walls)
@@ -483,7 +503,8 @@
   )
 
 ; create-block: PosInt Time --> Block
-; Given a number (order) and the time elapsed, creates a block with more and more health as the time goes by.
+; Given a number (order) and the time elapsed, creates a block with more and more health as the
+; time goes by.
 (define (create-block n t)
   (make-block
    (+ (* n (/ WIDTH 5)) (/ WIDTH 10))
