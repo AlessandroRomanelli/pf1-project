@@ -394,7 +394,7 @@
 ; animate-player: Player Time --> Player
 (define (animate-player player time)
   (make-player
-   (+ (* 1/16 (sqrt time) (cos (* 1/8 time)) (log time)) 50)
+   (+ 20 (log time) (- 0 (* (log (/ time 120)) (cos (* 6 (sin (* 1/20 time)))))))
    (player-x player)
    (player-y player)))
 
