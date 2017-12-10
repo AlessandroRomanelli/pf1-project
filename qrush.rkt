@@ -16,8 +16,13 @@
 
 (define song1 (rs-read "Theory_Of_Everything.wav"))
 (define song2 (rs-read "dryout.wav"))
+(define song3 (rs-read "Highscore.wav"))
+(define song4 (rs-read "Vortex.wav"))
 
-(define playlist (list song1 song2))
+
+
+
+(define playlist (list song1 song2 song3 song4))
 
 (pstream-play (make-pstream #:buffer-time 0.900)
               (list-ref playlist (inexact->exact (floor (* (random) (length playlist))))))
